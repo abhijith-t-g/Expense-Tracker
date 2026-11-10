@@ -1,6 +1,6 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://unistyl.es/), etc.
+ * Rupee Tracker Design System & Themes
+ * Supports Light & Dark themes with Indian Rupee palette accents.
  */
 
 import '@/global.css';
@@ -9,32 +9,65 @@ import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
+    primary: '#00875A', // Emerald green
+    primaryLight: '#E3FCEF',
+    primaryDark: '#006644',
+    expense: '#E53935', // Crisp red
+    expenseLight: '#FFEBEE',
+    income: '#00875A', // Fresh green
+    incomeLight: '#E8F5E9',
+    text: '#172B4D',
+    textSecondary: '#5E6C84',
+    textMuted: '#97A0AF',
+    background: '#F4F5F7',
+    surface: '#FFFFFF',
+    card: '#FFFFFF',
+    border: '#DFE1E6',
+    borderSubtle: '#EBECF0',
+    backgroundElement: '#EBECF0',
+    backgroundSelected: '#DEEBFF',
+    tint: '#00875A',
+    tabIconDefault: '#8993A4',
+    tabIconSelected: '#00875A',
+    danger: '#DE350B',
+    warning: '#FFAB00',
+    success: '#36B37E',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    primary: '#36B37E',
+    primaryLight: '#092B1C',
+    primaryDark: '#006644',
+    expense: '#FF6B6B',
+    expenseLight: '#381313',
+    income: '#36B37E',
+    incomeLight: '#092B1C',
+    text: '#F4F5F7',
+    textSecondary: '#A5ADBA',
+    textMuted: '#6B778C',
+    background: '#121214',
+    surface: '#1E1F23',
+    card: '#1E1F23',
+    border: '#2E3136',
+    borderSubtle: '#24262A',
+    backgroundElement: '#26282D',
+    backgroundSelected: '#253858',
+    tint: '#36B37E',
+    tabIconDefault: '#7A869A',
+    tabIconSelected: '#36B37E',
+    danger: '#FF5630',
+    warning: '#FFAB00',
+    success: '#36B37E',
   },
 } as const;
 
-export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
+export type ThemeColors = typeof Colors.light;
+export type ThemeColor = keyof ThemeColors;
 
 export const Fonts = Platform.select({
   ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
     sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
     serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
     rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
     mono: 'ui-monospace',
   },
   default: {
@@ -61,5 +94,14 @@ export const Spacing = {
   six: 64,
 } as const;
 
-export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
+export const Radius = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 24,
+  full: 9999,
+} as const;
+
+export const BottomTabInset = Platform.select({ ios: 50, android: 75 }) ?? 0;
 export const MaxContentWidth = 800;
