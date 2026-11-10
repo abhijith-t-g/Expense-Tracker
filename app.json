@@ -11,6 +11,7 @@
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "com.rupeetracker.app",
       "adaptiveIcon": {
         "backgroundColor": "#00875A",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -39,6 +40,16 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "f46e7cbc-a5ef-4a95-8d67-acca4a6aa6f5"
+      }
     }
   }
 }
