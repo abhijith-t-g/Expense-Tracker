@@ -17,12 +17,11 @@ export const transactionInputSchema = z.object({
     .int()
     .positive('Please select a valid category'),
   title: z
-    .string({
-      message: 'Title is required',
-    })
+    .string()
     .trim()
-    .min(1, 'Please enter a transaction title')
-    .max(100, 'Title cannot exceed 100 characters'),
+    .max(100, 'Title cannot exceed 100 characters')
+    .optional()
+    .default(''),
   description: z
     .string()
     .trim()

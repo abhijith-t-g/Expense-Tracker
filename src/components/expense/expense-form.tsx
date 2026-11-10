@@ -80,14 +80,22 @@ export function ExpenseForm({
       ? categoryId
       : categories[0]?.id ?? null;
 
+  const selectedCategory = categories.find((c) => c.id === effectiveCategoryId);
+
   const handleSubmit = async () => {
     setValidationErrors({});
+
+    // If title is empty, automatically use category name as title
+    const resolvedTitle =
+      title.trim() ||
+      selectedCategory?.name ||
+      (type === 'expense' ? 'Expense' : 'Income');
 
     const payload = {
       type,
       amount: amountPaise,
       categoryId: effectiveCategoryId ?? 0,
-      title: title.trim(),
+      title: resolvedTitle,
       description: description.trim() ? description.trim() : null,
       date,
       time: time.trim() ? time.trim() : null,
@@ -233,9 +241,14 @@ export function ExpenseForm({
 
         {/* Title Input */}
         <View style={styles.section}>
-          <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
-            Title *
-          </Text>
+          <View style={styles.labelWithHintRow}>
+            <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
+              Title
+            </Text>
+            <Text style={[styles.optionalHint, { color: theme.textMuted }]}>
+              Optional — defaults to &quot;{selectedCategory?.name ?? 'Category'}&quot;
+            </Text>
+          </View>
           <TextInput
             style={[
               styles.textInput,
@@ -255,9 +268,9 @@ export function ExpenseForm({
               }
             }}
             placeholder={
-              type === 'expense'
-                ? 'e.g. Swiggy Lunch, Bus Fare, Grocery'
-                : 'e.g. Monthly Salary, Freelance project'
+              selectedCategory
+                ? `e.g. ${selectedCategory.name} (or leave empty)`
+                : 'e.g. Swiggy Lunch (or leave empty)'
             }
             placeholderTextColor={theme.textMuted}
             maxLength={100}
@@ -479,6 +492,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  labelWithHintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  optionalHint: {
+    fontSize: 11,
+    fontWeight: '500',
   },
   textInput: {
     borderRadius: Radius.md,

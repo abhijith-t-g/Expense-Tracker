@@ -209,13 +209,26 @@ export const TransactionRepository = {
     const db = getDb();
     const amountInPaise = Math.round(data.amount);
 
+    let finalTitle = data.title?.trim() || '';
+    if (!finalTitle && data.categoryId) {
+      const [cat] = await db
+        .select({ name: categories.name })
+        .from(categories)
+        .where(eq(categories.id, data.categoryId))
+        .limit(1);
+      finalTitle = cat?.name || (data.type === 'expense' ? 'Expense' : 'Income');
+    }
+    if (!finalTitle) {
+      finalTitle = data.type === 'expense' ? 'Expense' : 'Income';
+    }
+
     const [inserted] = await db
       .insert(transactions)
       .values({
         amount: amountInPaise,
         type: data.type,
         categoryId: data.categoryId,
-        title: data.title.trim(),
+        title: finalTitle,
         description: data.description?.trim() || null,
         note: data.description?.trim() || null,
         date: data.date,

@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Radius, Spacing } from '@/constants/theme';
 import { useConfirmDialog } from '@/context/confirm-dialog-context';
+import { useThemePreference } from '@/context/theme-context';
 import { useToast } from '@/context/toast-context';
 import { CURRENT_SCHEMA_VERSION } from '@/db/migrations';
 import { useBalance } from '@/hooks/use-balance';
@@ -32,6 +33,7 @@ import {
 export default function SettingsScreen() {
   const theme = useTheme();
   const systemColorScheme = useSystemColorScheme();
+  const { themeMode, setThemeMode } = useThemePreference();
   const { showSuccess, showError, showInfo } = useToast();
   const { showConfirm, showAlert } = useConfirmDialog();
 
@@ -243,32 +245,84 @@ export default function SettingsScreen() {
             Appearance
           </Text>
           <Card variant="outlined" style={styles.card}>
-            <View style={styles.row}>
-              <View style={styles.rowLeft}>
-                <View
-                  style={[
-                    styles.iconBox,
-                    { backgroundColor: theme.backgroundElement },
-                  ]}>
-                  <Ionicons
-                    name={systemColorScheme === 'dark' ? 'moon' : 'sunny'}
-                    size={20}
-                    color={theme.primary}
-                  />
-                </View>
-                <View>
-                  <Text style={[styles.itemTitle, { color: theme.text }]}>
-                    Theme
-                  </Text>
-                  <Text
-                    style={[styles.itemSubtitle, { color: theme.textSecondary }]}>
-                    Active: {systemColorScheme === 'dark' ? 'Dark' : 'Light'} Mode
-                  </Text>
-                </View>
-              </View>
-              <Text style={[styles.badge, { color: theme.primary }]}>
-                Light + Dark
-              </Text>
+            <View style={styles.themeSelectorContainer}>
+              {[
+                {
+                  id: 'system' as const,
+                  label: 'System',
+                  sublabel: `Auto (${systemColorScheme === 'dark' ? 'Dark' : 'Light'})`,
+                  icon: 'phone-portrait-outline' as const,
+                },
+                {
+                  id: 'light' as const,
+                  label: 'Light',
+                  sublabel: 'Bright & crisp',
+                  icon: 'sunny' as const,
+                },
+                {
+                  id: 'dark' as const,
+                  label: 'Dark',
+                  sublabel: 'OLED dark',
+                  icon: 'moon' as const,
+                },
+              ].map((opt) => {
+                const isSelected = themeMode === opt.id;
+                return (
+                  <Pressable
+                    key={opt.id}
+                    style={({ pressed }) => [
+                      styles.themeCardOption,
+                      {
+                        backgroundColor: isSelected
+                          ? theme.backgroundSelected
+                          : pressed
+                            ? theme.backgroundElement
+                            : theme.surface,
+                        borderColor: isSelected ? theme.primary : theme.border,
+                      },
+                    ]}
+                    onPress={async () => {
+                      if (themeMode !== opt.id) {
+                        await setThemeMode(opt.id);
+                        showSuccess(`Switched to ${opt.label} mode`);
+                      }
+                    }}>
+                    <View
+                      style={[
+                        styles.themeIconCircle,
+                        {
+                          backgroundColor: isSelected
+                            ? theme.primaryLight
+                            : theme.backgroundElement,
+                        },
+                      ]}>
+                      <Ionicons
+                        name={opt.icon}
+                        size={18}
+                        color={isSelected ? theme.primary : theme.textSecondary}
+                      />
+                    </View>
+                    <Text
+                      style={[
+                        styles.themeOptionTitle,
+                        {
+                          color: isSelected ? theme.primary : theme.text,
+                        },
+                      ]}
+                      numberOfLines={1}>
+                      {opt.label}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.themeOptionSub,
+                        { color: theme.textSecondary },
+                      ]}
+                      numberOfLines={1}>
+                      {opt.sublabel}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
           </Card>
         </View>
@@ -492,6 +546,35 @@ const styles = StyleSheet.create({
   card: {
     padding: Spacing.three,
     gap: Spacing.two,
+  },
+  themeSelectorContainer: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  themeCardOption: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderRadius: Radius.md,
+    padding: Spacing.two + 2,
+    alignItems: 'center',
+    gap: 4,
+  },
+  themeIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
+  },
+  themeOptionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  themeOptionSub: {
+    fontSize: 10,
+    fontWeight: '500',
+    textAlign: 'center',
   },
   row: {
     flexDirection: 'row',

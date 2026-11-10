@@ -60,7 +60,33 @@ export const Colors = {
   },
 } as const;
 
-export type ThemeColors = typeof Colors.light;
+export type ThemePalette = {
+  primary: string;
+  primaryLight: string;
+  primaryDark: string;
+  expense: string;
+  expenseLight: string;
+  income: string;
+  incomeLight: string;
+  text: string;
+  textSecondary: string;
+  textMuted: string;
+  background: string;
+  surface: string;
+  card: string;
+  border: string;
+  borderSubtle: string;
+  backgroundElement: string;
+  backgroundSelected: string;
+  tint: string;
+  tabIconDefault: string;
+  tabIconSelected: string;
+  danger: string;
+  warning: string;
+  success: string;
+};
+
+export type ThemeColors = ThemePalette;
 export type ThemeColor = keyof ThemeColors;
 
 export const Fonts = Platform.select({
