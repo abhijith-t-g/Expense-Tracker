@@ -30,3 +30,4 @@ export function useDatabase() {
 
   return { isReady, error };
 }
+

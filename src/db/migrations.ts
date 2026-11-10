@@ -110,3 +110,4 @@ export async function runMigrations(db: SQLiteDatabase): Promise<void> {
     }
   }
 }
+

@@ -77,3 +77,4 @@ export const CategoryRepository = {
     return (result.changes ?? 0) > 0;
   },
 };
+

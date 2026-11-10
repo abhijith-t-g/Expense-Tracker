@@ -59,3 +59,4 @@ export interface CategoryBreakdown {
   count: number;
   percentage: number;
 }
+

@@ -17,3 +17,4 @@ export interface ImportResult {
   importedTransactions: number;
   message?: string;
 }
+

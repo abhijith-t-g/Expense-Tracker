@@ -126,3 +126,4 @@ export function paiseToInputString(paise: number): string {
   const rupees = paise / 100;
   return Number.isInteger(rupees) ? rupees.toString() : rupees.toFixed(2);
 }
+

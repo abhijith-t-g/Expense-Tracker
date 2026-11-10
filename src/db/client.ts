@@ -69,3 +69,4 @@ export function getRawDb(): SQLite.SQLiteDatabase {
   }
   return sqliteDbInstance;
 }
+

@@ -116,3 +116,4 @@ export const DEFAULT_CATEGORIES: SeedCategory[] = [
     isDefault: true,
   },
 ];
+

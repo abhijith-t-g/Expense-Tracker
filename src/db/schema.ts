@@ -55,3 +55,4 @@ export type CategorySelect = typeof categories.$inferSelect;
 export type CategoryInsert = typeof categories.$inferInsert;
 export type TransactionSelect = typeof transactions.$inferSelect;
 export type TransactionInsert = typeof transactions.$inferInsert;
+
