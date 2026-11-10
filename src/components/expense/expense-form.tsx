@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -15,23 +14,29 @@ import { CategoryPicker } from '@/components/category/category-picker';
 import { AmountInput } from '@/components/expense/amount-input';
 import { Button } from '@/components/ui/button';
 import { Radius, Spacing } from '@/constants/theme';
+import { useToast } from '@/context/toast-context';
 import { useCategories } from '@/hooks/use-categories';
 import { useTheme } from '@/hooks/use-theme';
 import type { NewTransaction, TransactionType } from '@/types/database';
+import { validateTransactionInput } from '@/validation/transaction-schema';
 
 interface ExpenseFormProps {
   initialValues?: Partial<NewTransaction>;
   onSubmit: (transaction: NewTransaction) => Promise<void>;
   onCancel?: () => void;
+  isEditMode?: boolean;
 }
 
 export function ExpenseForm({
   initialValues,
   onSubmit,
   onCancel,
+  isEditMode = false,
 }: ExpenseFormProps) {
   const theme = useTheme();
+  const { showError } = useToast();
 
+  // Form states
   const [type, setType] = useState<TransactionType>(
     initialValues?.type ?? 'expense'
   );
@@ -41,45 +46,91 @@ export function ExpenseForm({
   const [categoryId, setCategoryId] = useState<number | null>(
     initialValues?.categoryId ?? null
   );
-  const [note, setNote] = useState<string>(initialValues?.note ?? '');
-  const [date, setDate] = useState<string>(
-    initialValues?.date ?? new Date().toISOString().split('T')[0]
+  const [title, setTitle] = useState<string>(initialValues?.title ?? '');
+  const [description, setDescription] = useState<string>(
+    initialValues?.description ?? ''
   );
+
+  const getTodayYMD = () => new Date().toISOString().split('T')[0];
+  const getCurrentHM = () => {
+    const now = new Date();
+    const h = now.getHours().toString().padStart(2, '0');
+    const m = now.getMinutes().toString().padStart(2, '0');
+    return `${h}:${m}`;
+  };
+
+  const [date, setDate] = useState<string>(
+    initialValues?.date ?? getTodayYMD()
+  );
+  const [time, setTime] = useState<string>(
+    initialValues?.time ?? getCurrentHM()
+  );
+
+  const [validationErrors, setValidationErrors] = useState<
+    Record<string, string>
+  >({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Load categories filtered by current type
   const { categories } = useCategories(type);
 
-  // Derive selected category (defaults to first category if unselected or not in type)
+  // Derive selected category (defaults to first available if unselected)
   const effectiveCategoryId =
     categoryId && categories.some((c) => c.id === categoryId)
       ? categoryId
       : categories[0]?.id ?? null;
 
   const handleSubmit = async () => {
-    if (amountPaise <= 0) {
-      Alert.alert('Invalid Amount', 'Please enter a valid amount greater than ₹0.');
+    setValidationErrors({});
+
+    const payload = {
+      type,
+      amount: amountPaise,
+      categoryId: effectiveCategoryId ?? 0,
+      title: title.trim(),
+      description: description.trim() ? description.trim() : null,
+      date,
+      time: time.trim() ? time.trim() : null,
+    };
+
+    // Zod validation
+    const validationResult = validateTransactionInput(payload);
+    if (!validationResult.success) {
+      const fieldErrors: Record<string, string> = {};
+      for (const issue of validationResult.error.issues) {
+        const fieldName = issue.path[0]?.toString() ?? 'form';
+        fieldErrors[fieldName] = issue.message;
+      }
+      setValidationErrors(fieldErrors);
+
+      const firstError = validationResult.error.issues[0]?.message;
+      if (firstError) {
+        showError(firstError);
+      }
       return;
     }
 
     try {
       setIsSubmitting(true);
       await onSubmit({
-        amount: amountPaise,
-        type,
-        categoryId: effectiveCategoryId,
-        note: note.trim() || null,
-        date,
+        amount: payload.amount,
+        type: payload.type,
+        categoryId: payload.categoryId,
+        title: payload.title,
+        description: payload.description,
+        date: payload.date,
+        time: payload.time,
       });
     } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to save transaction');
+      showError(
+        err instanceof Error ? err.message : 'Failed to save transaction'
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const getTodayISO = () => new Date().toISOString().split('T')[0];
-  const getYesterdayISO = () => {
+  const getYesterdayYMD = () => {
     const d = new Date();
     d.setDate(d.getDate() - 1);
     return d.toISOString().split('T')[0];
@@ -161,24 +212,86 @@ export function ExpenseForm({
           </Pressable>
         </View>
 
-        {/* Amount Input */}
-        <AmountInput
-          amountPaise={amountPaise}
-          onChangePaise={setAmountPaise}
-          autoFocus={!initialValues?.amount}
-        />
+        {/* Amount Input (Paise storage) */}
+        <View>
+          <AmountInput
+            amountPaise={amountPaise}
+            onChangePaise={(newPaise) => {
+              setAmountPaise(newPaise);
+              if (validationErrors.amount) {
+                setValidationErrors((prev) => ({ ...prev, amount: '' }));
+              }
+            }}
+            autoFocus={!initialValues?.amount}
+          />
+          {validationErrors.amount ? (
+            <Text style={[styles.errorText, { color: theme.danger }]}>
+              {validationErrors.amount}
+            </Text>
+          ) : null}
+        </View>
 
-        {/* Category Picker */}
-        <CategoryPicker
-          categories={categories}
-          selectedCategoryId={effectiveCategoryId}
-          onSelectCategory={setCategoryId}
-        />
-
-        {/* Date Selector */}
+        {/* Title Input */}
         <View style={styles.section}>
           <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
-            Date
+            Title *
+          </Text>
+          <TextInput
+            style={[
+              styles.textInput,
+              {
+                backgroundColor: theme.backgroundElement,
+                color: theme.text,
+                borderColor: validationErrors.title
+                  ? theme.danger
+                  : theme.border,
+              },
+            ]}
+            value={title}
+            onChangeText={(txt) => {
+              setTitle(txt);
+              if (validationErrors.title) {
+                setValidationErrors((prev) => ({ ...prev, title: '' }));
+              }
+            }}
+            placeholder={
+              type === 'expense'
+                ? 'e.g. Swiggy Lunch, Bus Fare, Grocery'
+                : 'e.g. Monthly Salary, Freelance project'
+            }
+            placeholderTextColor={theme.textMuted}
+            maxLength={100}
+          />
+          {validationErrors.title ? (
+            <Text style={[styles.errorText, { color: theme.danger }]}>
+              {validationErrors.title}
+            </Text>
+          ) : null}
+        </View>
+
+        {/* Category Picker */}
+        <View>
+          <CategoryPicker
+            categories={categories}
+            selectedCategoryId={effectiveCategoryId}
+            onSelectCategory={(id) => {
+              setCategoryId(id);
+              if (validationErrors.categoryId) {
+                setValidationErrors((prev) => ({ ...prev, categoryId: '' }));
+              }
+            }}
+          />
+          {validationErrors.categoryId ? (
+            <Text style={[styles.errorText, { color: theme.danger }]}>
+              {validationErrors.categoryId}
+            </Text>
+          ) : null}
+        </View>
+
+        {/* Date & Time Row */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
+            Date & Time
           </Text>
           <View style={styles.dateChipsRow}>
             <Pressable
@@ -186,23 +299,23 @@ export function ExpenseForm({
                 styles.dateChip,
                 {
                   backgroundColor:
-                    date === getTodayISO()
+                    date === getTodayYMD()
                       ? theme.backgroundSelected
                       : theme.card,
                   borderColor:
-                    date === getTodayISO() ? theme.primary : theme.border,
+                    date === getTodayYMD() ? theme.primary : theme.border,
                 },
               ]}
-              onPress={() => setDate(getTodayISO())}>
+              onPress={() => setDate(getTodayYMD())}>
               <Text
                 style={[
                   styles.dateChipText,
                   {
                     color:
-                      date === getTodayISO()
+                      date === getTodayYMD()
                         ? theme.primary
                         : theme.textSecondary,
-                    fontWeight: date === getTodayISO() ? '700' : '500',
+                    fontWeight: date === getTodayYMD() ? '700' : '500',
                   },
                 ]}>
                 Today
@@ -214,72 +327,99 @@ export function ExpenseForm({
                 styles.dateChip,
                 {
                   backgroundColor:
-                    date === getYesterdayISO()
+                    date === getYesterdayYMD()
                       ? theme.backgroundSelected
                       : theme.card,
                   borderColor:
-                    date === getYesterdayISO() ? theme.primary : theme.border,
+                    date === getYesterdayYMD() ? theme.primary : theme.border,
                 },
               ]}
-              onPress={() => setDate(getYesterdayISO())}>
+              onPress={() => setDate(getYesterdayYMD())}>
               <Text
                 style={[
                   styles.dateChipText,
                   {
                     color:
-                      date === getYesterdayISO()
+                      date === getYesterdayYMD()
                         ? theme.primary
                         : theme.textSecondary,
-                    fontWeight: date === getYesterdayISO() ? '700' : '500',
+                    fontWeight: date === getYesterdayYMD() ? '700' : '500',
                   },
                 ]}>
                 Yesterday
               </Text>
             </Pressable>
 
-            <View
+            <TextInput
               style={[
-                styles.customDateDisplay,
+                styles.dateInputCustom,
                 {
-                  backgroundColor: theme.card,
-                  borderColor: theme.border,
+                  backgroundColor: theme.backgroundElement,
+                  borderColor: validationErrors.date
+                    ? theme.danger
+                    : theme.border,
+                  color: theme.text,
                 },
-              ]}>
-              <Ionicons
-                name="calendar-outline"
-                size={16}
-                color={theme.textSecondary}
-              />
-              <Text style={[styles.customDateText, { color: theme.text }]}>
-                {date}
-              </Text>
-            </View>
+              ]}
+              value={date}
+              onChangeText={setDate}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor={theme.textMuted}
+            />
+
+            <TextInput
+              style={[
+                styles.timeInputCustom,
+                {
+                  backgroundColor: theme.backgroundElement,
+                  borderColor: validationErrors.time
+                    ? theme.danger
+                    : theme.border,
+                  color: theme.text,
+                },
+              ]}
+              value={time}
+              onChangeText={setTime}
+              placeholder="HH:MM"
+              placeholderTextColor={theme.textMuted}
+              maxLength={5}
+            />
           </View>
+          {validationErrors.date ? (
+            <Text style={[styles.errorText, { color: theme.danger }]}>
+              {validationErrors.date}
+            </Text>
+          ) : null}
+          {validationErrors.time ? (
+            <Text style={[styles.errorText, { color: theme.danger }]}>
+              {validationErrors.time}
+            </Text>
+          ) : null}
         </View>
 
-        {/* Note / Description */}
+        {/* Optional Description Input */}
         <View style={styles.section}>
           <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
-            Note (Optional)
+            Description (Optional)
           </Text>
           <TextInput
             style={[
-              styles.noteInput,
+              styles.textInput,
               {
                 backgroundColor: theme.backgroundElement,
                 color: theme.text,
                 borderColor: theme.border,
               },
             ]}
-            value={note}
-            onChangeText={setNote}
-            placeholder="e.g. Swiggy lunch, Chai & snacks, Metro recharge"
+            value={description}
+            onChangeText={setDescription}
+            placeholder="Add additional context or notes"
             placeholderTextColor={theme.textMuted}
-            maxLength={100}
+            maxLength={250}
           />
         </View>
 
-        {/* Submit & Cancel Actions */}
+        {/* Submit Actions */}
         <View style={styles.actionButtonsRow}>
           {onCancel && (
             <Button
@@ -290,7 +430,11 @@ export function ExpenseForm({
             />
           )}
           <Button
-            title={`Save ${type === 'expense' ? 'Expense' : 'Income'}`}
+            title={
+              isEditMode
+                ? 'Update Transaction'
+                : `Save ${type === 'expense' ? 'Expense' : 'Income'}`
+            }
             variant="primary"
             loading={isSubmitting}
             onPress={handleSubmit}
@@ -331,10 +475,22 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   sectionLabel: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  textInput: {
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two + 4,
+    fontSize: 15,
+    borderWidth: 1,
+  },
+  errorText: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: Spacing.half,
   },
   dateChipsRow: {
     flexDirection: 'row',
@@ -350,26 +506,23 @@ const styles = StyleSheet.create({
   dateChipText: {
     fontSize: 13,
   },
-  customDateDisplay: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.one,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    marginLeft: 'auto',
-  },
-  customDateText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  noteInput: {
+  dateInputCustom: {
+    flex: 1,
     borderRadius: Radius.md,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.three,
-    fontSize: 15,
+    paddingHorizontal: Spacing.two + 2,
+    paddingVertical: Spacing.two,
+    fontSize: 13,
     borderWidth: 1,
+    textAlign: 'center',
+  },
+  timeInputCustom: {
+    width: 70,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.two,
+    fontSize: 13,
+    borderWidth: 1,
+    textAlign: 'center',
   },
   actionButtonsRow: {
     flexDirection: 'row',

@@ -12,7 +12,10 @@ import { StatusBar } from 'expo-status-bar';
 import { useDatabase } from '@/hooks/use-database';
 import { useTheme } from '@/hooks/use-theme';
 
-// Keep splash screen visible while database initialization runs
+import { ToastProvider } from '@/context/toast-context';
+import { DialogProvider } from '@/context/confirm-dialog-context';
+
+// Keep splash screen visible until database migrations are ready
 SplashScreen.preventAutoHideAsync().catch(() => {
   /* ignore */
 });
@@ -72,29 +75,39 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-      <Stack
-        screenOptions={{
-          headerStyle: {
-            backgroundColor: theme.surface,
-          },
-          headerTintColor: theme.text,
-          headerTitleStyle: {
-            fontWeight: '700',
-          },
-          contentStyle: {
-            backgroundColor: theme.background,
-          },
-        }}>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="add"
-          options={{
-            presentation: 'modal',
-            title: 'Add Transaction',
-          }}
-        />
-      </Stack>
+      <ToastProvider>
+        <DialogProvider>
+          <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+          <Stack
+            screenOptions={{
+              headerStyle: {
+                backgroundColor: theme.surface,
+              },
+              headerTintColor: theme.text,
+              headerTitleStyle: {
+                fontWeight: '700',
+              },
+              contentStyle: {
+                backgroundColor: theme.background,
+              },
+            }}>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen
+              name="add"
+              options={{
+                presentation: 'modal',
+                title: 'Transaction',
+              }}
+            />
+            <Stack.Screen
+              name="manage-categories"
+              options={{
+                title: 'Manage Categories',
+              }}
+            />
+          </Stack>
+        </DialogProvider>
+      </ToastProvider>
     </ThemeProvider>
   );
 }

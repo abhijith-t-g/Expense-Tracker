@@ -10,9 +10,13 @@ export const BackupRepository = {
    */
   async exportAllData(): Promise<BackupData> {
     const db = getDb();
+    const rawDb = getRawDb();
 
     const categoryRows = await db.select().from(categories);
     const transactionRows = await db.select().from(transactions);
+    const openingBalRow = await rawDb.getFirstAsync<{ value: string }>(
+      `SELECT value FROM app_metadata WHERE key = 'initial_opening_balance';`
+    );
 
     const formattedCategories: Category[] = categoryRows.map((c) => ({
       id: c.id,
@@ -29,8 +33,11 @@ export const BackupRepository = {
       amount: t.amount,
       type: t.type as 'expense' | 'income',
       categoryId: t.categoryId,
+      title: t.title || t.note || 'Transaction',
+      description: t.description || t.note || null,
       note: t.note,
       date: t.date,
+      time: t.time,
       createdAt: t.createdAt,
       updatedAt: t.updatedAt,
     }));
@@ -40,6 +47,7 @@ export const BackupRepository = {
       appName: 'Rupee Tracker',
       exportedAt: new Date().toISOString(),
       currency: 'INR',
+      initialOpeningBalancePaise: openingBalRow ? parseInt(openingBalRow.value, 10) || 0 : 0,
       categories: formattedCategories,
       transactions: formattedTransactions,
     };
@@ -62,15 +70,19 @@ export const BackupRepository = {
 
     await rawDb.withTransactionAsync(async () => {
       if (mode === 'replace') {
-        // Clear existing transactions
         await rawDb.execAsync('DELETE FROM transactions;');
+        if (data.initialOpeningBalancePaise !== undefined) {
+          await rawDb.runAsync(
+            `INSERT OR REPLACE INTO app_metadata (key, value) VALUES ('initial_opening_balance', ?);`,
+            [data.initialOpeningBalancePaise.toString()]
+          );
+        }
       }
 
-      // Map old category IDs to new/existing category IDs
+      // Map category IDs
       const categoryIdMap = new Map<number, number>();
 
       for (const cat of data.categories) {
-        // Check if category name with same type exists
         const existing = await rawDb.getFirstAsync<{ id: number }>(
           'SELECT id FROM categories WHERE name = ? AND type = ? LIMIT 1;',
           [cat.name, cat.type]
@@ -91,15 +103,21 @@ export const BackupRepository = {
       // Insert transactions
       for (const t of data.transactions) {
         const mappedCatId = t.categoryId ? categoryIdMap.get(t.categoryId) ?? null : null;
+        const title = t.title || t.note || 'Transaction';
+        const description = t.description || t.note || null;
+
         await rawDb.runAsync(
-          `INSERT INTO transactions (amount, type, category_id, note, date, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?);`,
+          `INSERT INTO transactions (amount, type, category_id, title, description, note, date, time, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
           [
             t.amount,
             t.type,
             mappedCatId,
-            t.note ?? null,
+            title,
+            description,
+            description,
             t.date,
+            t.time ?? null,
             t.createdAt ?? new Date().toISOString(),
             t.updatedAt ?? new Date().toISOString(),
           ]
@@ -116,4 +134,3 @@ export const BackupRepository = {
     };
   },
 };
-

@@ -4,8 +4,8 @@ import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 export const categories = sqliteTable('categories', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull(),
-  icon: text('icon').notNull(), // Material / Ionicons icon name or emoji
-  color: text('color').notNull(), // Hex color code
+  icon: text('icon').notNull(),
+  color: text('color').notNull(),
   type: text('type', { enum: ['expense', 'income'] })
     .default('expense')
     .notNull(),
@@ -25,8 +25,11 @@ export const transactions = sqliteTable('transactions', {
   categoryId: integer('category_id').references(() => categories.id, {
     onDelete: 'set null',
   }),
-  note: text('note'),
-  date: text('date').notNull(), // ISO Date string 'YYYY-MM-DD'
+  title: text('title').notNull(),
+  description: text('description'),
+  note: text('note'), // for backwards compatibility
+  date: text('date').notNull(), // ISO Date 'YYYY-MM-DD'
+  time: text('time'), // 'HH:MM'
   createdAt: text('created_at')
     .default(sql`(CURRENT_TIMESTAMP)`)
     .notNull(),
@@ -55,4 +58,3 @@ export type CategorySelect = typeof categories.$inferSelect;
 export type CategoryInsert = typeof categories.$inferInsert;
 export type TransactionSelect = typeof transactions.$inferSelect;
 export type TransactionInsert = typeof transactions.$inferInsert;
-

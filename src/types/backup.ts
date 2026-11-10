@@ -5,6 +5,7 @@ export interface BackupData {
   appName: string;
   exportedAt: string;
   currency: 'INR';
+  initialOpeningBalancePaise?: number;
   categories: Category[];
   transactions: Transaction[];
 }

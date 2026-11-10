@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Alert,
   FlatList,
   Modal,
   Pressable,
@@ -15,6 +14,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Radius, Spacing } from '@/constants/theme';
+import { useConfirmDialog } from '@/context/confirm-dialog-context';
+import { useToast } from '@/context/toast-context';
 import { useCategories } from '@/hooks/use-categories';
 import { useTheme } from '@/hooks/use-theme';
 import type { Category, TransactionType } from '@/types/database';
@@ -57,21 +58,23 @@ const AVAILABLE_ICONS: (keyof typeof Ionicons.glyphMap)[] = [
   'paw',
 ];
 
-export default function CategoriesScreen() {
+export default function ManageCategoriesScreen() {
   const theme = useTheme();
+  const { showSuccess, showError, showInfo } = useToast();
+  const { showConfirm } = useConfirmDialog();
   const [activeTab, setActiveTab] = useState<TransactionType>('expense');
   const { categories, isLoading, refresh, addCategory, deleteCategory } =
     useCategories(activeTab);
 
-  // New Category Modal State
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [newName, setNewName] = useState('');
-  const [selectedIcon, setSelectedIcon] = useState<keyof typeof Ionicons.glyphMap>('pricetag');
+  const [selectedIcon, setSelectedIcon] =
+    useState<keyof typeof Ionicons.glyphMap>('pricetag');
   const [selectedColor, setSelectedColor] = useState(PALETTE_COLORS[0]);
 
   const handleCreateCategory = async () => {
     if (!newName.trim()) {
-      Alert.alert('Required', 'Please enter a category name');
+      showError('Please enter a category name');
       return;
     }
 
@@ -85,51 +88,39 @@ export default function CategoriesScreen() {
       });
       setNewName('');
       setIsModalVisible(false);
+      showSuccess(`Category "${newName.trim()}" created`);
     } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to create category');
+      showError(err instanceof Error ? err.message : 'Failed to create category');
     }
   };
 
-  const handleDeletePrompt = (cat: Category) => {
+  const handleDelete = (cat: Category) => {
     if (cat.isDefault) {
-      Alert.alert('Protected', 'Default system categories cannot be deleted.');
+      showInfo('Default system categories cannot be deleted');
       return;
     }
 
-    Alert.alert(
-      'Delete Category',
-      `Delete "${cat.name}"? Transactions using it will be kept as uncategorized.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => deleteCategory(cat.id),
-        },
-      ]
-    );
+    showConfirm({
+      title: 'Delete Category',
+      message: `Delete "${cat.name}"? Transactions using this category will be preserved as uncategorized.`,
+      confirmText: 'Delete',
+      isDestructive: true,
+      onConfirm: async () => {
+        await deleteCategory(cat.id);
+        showSuccess(`Category "${cat.name}" deleted`);
+      },
+    });
   };
 
   return (
     <SafeAreaView
       style={[styles.safeArea, { backgroundColor: theme.background }]}
-      edges={['top', 'left', 'right']}>
+      edges={['left', 'right', 'bottom']}>
       <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: theme.text }]}>Categories</Text>
-          <Pressable
-            style={[styles.addBtn, { backgroundColor: theme.primary }]}
-            onPress={() => setIsModalVisible(true)}>
-            <Ionicons name="add" size={20} color="#FFFFFF" />
-            <Text style={styles.addBtnText}>New</Text>
-          </Pressable>
-        </View>
-
-        {/* Tab Toggle: Expense vs Income */}
+        {/* Toggle between Expense & Income categories */}
         <View
           style={[
-            styles.toggleContainer,
+            styles.toggleRow,
             { backgroundColor: theme.backgroundElement },
           ]}>
           <Pressable
@@ -181,7 +172,7 @@ export default function CategoriesScreen() {
           </Pressable>
         </View>
 
-        {/* Category List */}
+        {/* List of categories */}
         <FlatList
           data={categories}
           keyExtractor={(item) => item.id.toString()}
@@ -204,7 +195,7 @@ export default function CategoriesScreen() {
                 <View
                   style={[
                     styles.iconBox,
-                    { backgroundColor: `${item.color}20` },
+                    { backgroundColor: `${item.color}22` },
                   ]}>
                   <Ionicons name={iconName} size={22} color={item.color} />
                 </View>
@@ -212,14 +203,15 @@ export default function CategoriesScreen() {
                   <Text style={[styles.categoryName, { color: theme.text }]}>
                     {item.name}
                   </Text>
-                  <Text style={[styles.categoryTag, { color: theme.textMuted }]}>
+                  <Text
+                    style={[styles.categoryTag, { color: theme.textMuted }]}>
                     {item.isDefault ? 'Default' : 'Custom'}
                   </Text>
                 </View>
                 {!item.isDefault && (
                   <Pressable
                     hitSlop={10}
-                    onPress={() => handleDeletePrompt(item)}>
+                    onPress={() => handleDelete(item)}>
                     <Ionicons
                       name="trash-outline"
                       size={18}
@@ -232,7 +224,16 @@ export default function CategoriesScreen() {
           }}
         />
 
-        {/* Add Category Modal */}
+        {/* Add Category Button at Bottom */}
+        <Button
+          title={`Add New ${activeTab === 'expense' ? 'Expense' : 'Income'} Category`}
+          variant="primary"
+          icon={<Ionicons name="add" size={20} color="#FFFFFF" />}
+          onPress={() => setIsModalVisible(true)}
+          style={styles.bottomAddBtn}
+        />
+
+        {/* Modal for adding custom category */}
         <Modal
           visible={isModalVisible}
           animationType="slide"
@@ -246,15 +247,20 @@ export default function CategoriesScreen() {
               ]}>
               <View style={styles.modalHeader}>
                 <Text style={[styles.modalTitle, { color: theme.text }]}>
-                  Add {activeTab === 'expense' ? 'Expense' : 'Income'} Category
+                  New {activeTab === 'expense' ? 'Expense' : 'Income'} Category
                 </Text>
                 <Pressable onPress={() => setIsModalVisible(false)}>
-                  <Ionicons name="close" size={24} color={theme.textSecondary} />
+                  <Ionicons
+                    name="close"
+                    size={24}
+                    color={theme.textSecondary}
+                  />
                 </Pressable>
               </View>
 
-              <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>
-                Name
+              <Text
+                style={[styles.inputLabel, { color: theme.textSecondary }]}>
+                Category Name
               </Text>
               <TextInput
                 style={[
@@ -265,15 +271,16 @@ export default function CategoriesScreen() {
                     borderColor: theme.border,
                   },
                 ]}
-                placeholder="e.g. Subscriptions, Gym, Coffee"
+                placeholder="e.g. Subscriptions, Coffee, Gym"
                 placeholderTextColor={theme.textMuted}
                 value={newName}
                 onChangeText={setNewName}
+                maxLength={40}
               />
 
-              {/* Color Selection */}
-              <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>
-                Choose Color
+              <Text
+                style={[styles.inputLabel, { color: theme.textSecondary }]}>
+                Select Color
               </Text>
               <View style={styles.paletteRow}>
                 {PALETTE_COLORS.slice(0, 7).map((color) => (
@@ -289,9 +296,9 @@ export default function CategoriesScreen() {
                 ))}
               </View>
 
-              {/* Icon Selection */}
-              <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>
-                Choose Icon
+              <Text
+                style={[styles.inputLabel, { color: theme.textSecondary }]}>
+                Select Icon
               </Text>
               <View style={styles.iconSelectionRow}>
                 {AVAILABLE_ICONS.slice(0, 8).map((icon) => (
@@ -330,7 +337,7 @@ export default function CategoriesScreen() {
                   style={{ flex: 1 }}
                 />
                 <Button
-                  title="Save Category"
+                  title="Create Category"
                   variant="primary"
                   onPress={handleCreateCategory}
                   style={{ flex: 1 }}
@@ -350,33 +357,10 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    paddingHorizontal: Spacing.four,
+    padding: Spacing.four,
     gap: Spacing.three,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: Spacing.two,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '800',
-  },
-  addBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one + 2,
-    borderRadius: Radius.full,
-    gap: Spacing.half,
-  },
-  addBtnText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  toggleContainer: {
+  toggleRow: {
     flexDirection: 'row',
     borderRadius: Radius.lg,
     padding: Spacing.half,
@@ -392,7 +376,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   listContent: {
-    paddingBottom: Spacing.six,
+    paddingBottom: Spacing.four,
   },
   categoryCard: {
     flexDirection: 'row',
@@ -418,6 +402,9 @@ const styles = StyleSheet.create({
   },
   categoryTag: {
     fontSize: 12,
+  },
+  bottomAddBtn: {
+    marginTop: Spacing.one,
   },
   modalOverlay: {
     flex: 1,

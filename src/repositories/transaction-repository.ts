@@ -1,10 +1,14 @@
-import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import { getDb } from '@/db/client';
 import { categories, transactions } from '@/db/schema';
+import { BalanceService } from '@/services/balance-service';
+import { appEvents, EVENT_TRANSACTIONS_CHANGED } from '@/services/event-bus';
 import type {
   CategoryBreakdown,
   ExpenseSummary,
+  GroupedTransactions,
   NewTransaction,
+  SortOption,
   Transaction,
   TransactionType,
   TransactionWithCategory,
@@ -17,6 +21,8 @@ export interface TransactionFilterOptions {
   endDate?: string; // 'YYYY-MM-DD'
   categoryId?: number;
   type?: TransactionType;
+  searchQuery?: string;
+  sortBy?: SortOption;
 }
 
 export const TransactionRepository = {
@@ -38,6 +44,12 @@ export const TransactionRepository = {
     if (filters.type) {
       conditions.push(eq(transactions.type, filters.type));
     }
+    if (filters.searchQuery && filters.searchQuery.trim().length > 0) {
+      const pattern = `%${filters.searchQuery.trim().toLowerCase()}%`;
+      conditions.push(
+        sql`(LOWER(${transactions.title}) LIKE ${pattern} OR LOWER(COALESCE(${transactions.description}, '')) LIKE ${pattern} OR LOWER(COALESCE(${categories.name}, '')) LIKE ${pattern})`
+      );
+    }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -47,8 +59,11 @@ export const TransactionRepository = {
         amount: transactions.amount,
         type: transactions.type,
         categoryId: transactions.categoryId,
+        title: transactions.title,
+        description: transactions.description,
         note: transactions.note,
         date: transactions.date,
+        time: transactions.time,
         createdAt: transactions.createdAt,
         updatedAt: transactions.updatedAt,
         categoryName: categories.name,
@@ -63,7 +78,23 @@ export const TransactionRepository = {
       query = query.where(whereClause);
     }
 
-    query = query.orderBy(desc(transactions.date), desc(transactions.id));
+    // Apply sorting
+    const sortBy = filters.sortBy ?? 'newest';
+    switch (sortBy) {
+      case 'oldest':
+        query = query.orderBy(asc(transactions.date), asc(transactions.id));
+        break;
+      case 'highest_amount':
+        query = query.orderBy(desc(transactions.amount), desc(transactions.date));
+        break;
+      case 'lowest_amount':
+        query = query.orderBy(asc(transactions.amount), desc(transactions.date));
+        break;
+      case 'newest':
+      default:
+        query = query.orderBy(desc(transactions.date), desc(transactions.id));
+        break;
+    }
 
     if (filters.limit) {
       query = query.limit(filters.limit);
@@ -78,14 +109,56 @@ export const TransactionRepository = {
       amount: r.amount,
       type: r.type as TransactionType,
       categoryId: r.categoryId,
+      title: r.title || r.note || 'Transaction',
+      description: r.description || r.note || null,
       note: r.note,
       date: r.date,
+      time: r.time,
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
       categoryName: r.categoryName,
       categoryIcon: r.categoryIcon,
       categoryColor: r.categoryColor,
     }));
+  },
+
+  async getGroupedByDate(
+    filters: TransactionFilterOptions = {}
+  ): Promise<GroupedTransactions[]> {
+    const items = await this.getAll(filters);
+    const groupsMap = new Map<string, TransactionWithCategory[]>();
+
+    for (const item of items) {
+      const dateKey = item.date;
+      if (!groupsMap.has(dateKey)) {
+        groupsMap.set(dateKey, []);
+      }
+      groupsMap.get(dateKey)!.push(item);
+    }
+
+    const result: GroupedTransactions[] = [];
+    for (const [date, dayItems] of groupsMap.entries()) {
+      let totalExpense = 0;
+      let totalIncome = 0;
+
+      for (const t of dayItems) {
+        if (t.type === 'expense') {
+          totalExpense += t.amount;
+        } else {
+          totalIncome += t.amount;
+        }
+      }
+
+      result.push({
+        date,
+        dateLabel: BalanceService.formatGroupDateHeader(date),
+        items: dayItems,
+        totalExpensePaise: totalExpense,
+        totalIncomePaise: totalIncome,
+      });
+    }
+
+    return result;
   },
 
   async getById(id: number): Promise<TransactionWithCategory | null> {
@@ -96,8 +169,11 @@ export const TransactionRepository = {
         amount: transactions.amount,
         type: transactions.type,
         categoryId: transactions.categoryId,
+        title: transactions.title,
+        description: transactions.description,
         note: transactions.note,
         date: transactions.date,
+        time: transactions.time,
         createdAt: transactions.createdAt,
         updatedAt: transactions.updatedAt,
         categoryName: categories.name,
@@ -116,8 +192,11 @@ export const TransactionRepository = {
       amount: r.amount,
       type: r.type as TransactionType,
       categoryId: r.categoryId,
+      title: r.title || r.note || 'Transaction',
+      description: r.description || r.note || null,
       note: r.note,
       date: r.date,
+      time: r.time,
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
       categoryName: r.categoryName,
@@ -128,27 +207,34 @@ export const TransactionRepository = {
 
   async create(data: NewTransaction): Promise<Transaction> {
     const db = getDb();
-    // Safety: ensure integer paise
     const amountInPaise = Math.round(data.amount);
 
     const [inserted] = await db
       .insert(transactions)
       .values({
         amount: amountInPaise,
-        type: data.type ?? 'expense',
-        categoryId: data.categoryId ?? null,
-        note: data.note?.trim() || null,
+        type: data.type,
+        categoryId: data.categoryId,
+        title: data.title.trim(),
+        description: data.description?.trim() || null,
+        note: data.description?.trim() || null,
         date: data.date,
+        time: data.time || null,
       })
       .returning();
+
+    appEvents.emit(EVENT_TRANSACTIONS_CHANGED);
 
     return {
       id: inserted.id,
       amount: inserted.amount,
       type: inserted.type as TransactionType,
       categoryId: inserted.categoryId,
+      title: inserted.title,
+      description: inserted.description,
       note: inserted.note,
       date: inserted.date,
+      time: inserted.time,
       createdAt: inserted.createdAt,
       updatedAt: inserted.updatedAt,
     };
@@ -169,11 +255,18 @@ export const TransactionRepository = {
     if (data.categoryId !== undefined) {
       updatePayload.categoryId = data.categoryId;
     }
-    if (data.note !== undefined) {
-      updatePayload.note = data.note ? data.note.trim() : null;
+    if (data.title !== undefined) {
+      updatePayload.title = data.title.trim();
+    }
+    if (data.description !== undefined) {
+      updatePayload.description = data.description?.trim() || null;
+      updatePayload.note = data.description?.trim() || null;
     }
     if (data.date !== undefined) {
       updatePayload.date = data.date;
+    }
+    if (data.time !== undefined) {
+      updatePayload.time = data.time || null;
     }
 
     const result = await db
@@ -181,7 +274,11 @@ export const TransactionRepository = {
       .set(updatePayload)
       .where(eq(transactions.id, id));
 
-    return (result.changes ?? 0) > 0;
+    const changed = (result.changes ?? 0) > 0;
+    if (changed) {
+      appEvents.emit(EVENT_TRANSACTIONS_CHANGED);
+    }
+    return changed;
   },
 
   async delete(id: number): Promise<boolean> {
@@ -189,12 +286,18 @@ export const TransactionRepository = {
     const result = await db
       .delete(transactions)
       .where(eq(transactions.id, id));
-    return (result.changes ?? 0) > 0;
+    const changed = (result.changes ?? 0) > 0;
+    if (changed) {
+      appEvents.emit(EVENT_TRANSACTIONS_CHANGED);
+    }
+    return changed;
   },
 
   async getSummary(
     startDate?: string,
-    endDate?: string
+    endDate?: string,
+    categoryId?: number,
+    type?: TransactionType
   ): Promise<ExpenseSummary> {
     const db = getDb();
     const conditions = [];
@@ -204,6 +307,12 @@ export const TransactionRepository = {
     }
     if (endDate) {
       conditions.push(lte(transactions.date, endDate));
+    }
+    if (categoryId) {
+      conditions.push(eq(transactions.categoryId, categoryId));
+    }
+    if (type) {
+      conditions.push(eq(transactions.type, type));
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;

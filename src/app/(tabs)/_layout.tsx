@@ -16,28 +16,16 @@ export default function TabsLayout() {
           backgroundColor: theme.surface,
           borderTopColor: theme.border,
           borderTopWidth: 1,
-          height: 60,
+          height: 62,
           paddingBottom: 8,
           paddingTop: 6,
         },
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 12,
           fontWeight: '600',
         },
       }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Overview',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? 'wallet' : 'wallet-outline'}
-              size={size}
-              color={color as string}
-            />
-          ),
-        }}
-      />
+      {/* 1. Left Tab: Expenses */}
       <Tabs.Screen
         name="expenses"
         options={{
@@ -51,10 +39,12 @@ export default function TabsLayout() {
           ),
         }}
       />
+
+      {/* 2. Center Tab: Dashboard (Default landing screen) */}
       <Tabs.Screen
-        name="categories"
+        name="index"
         options={{
-          title: 'Categories',
+          title: 'Dashboard',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? 'grid' : 'grid-outline'}
@@ -64,6 +54,8 @@ export default function TabsLayout() {
           ),
         }}
       />
+
+      {/* 3. Right Tab: Settings */}
       <Tabs.Screen
         name="settings"
         options={{
